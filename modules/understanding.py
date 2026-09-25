@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 
@@ -9,21 +10,63 @@ from modules.router import LocalRouter, RouteKind
 
 class CommandUnderstanding:
     """
-    Converts natural-language input into TIKKI's canonical
-    TikkiCommand structure.
+    Converts TIKKI input into the canonical TikkiCommand structure.
 
-    The existing LocalRouter remains the first and fastest
-    deterministic interpreter. This class adds a second layer
-    for common natural-language variations.
+    Supports two input paths:
+
+        Natural language -> deterministic router / regex -> TikkiCommand
+        JSON             -> validation                 -> TikkiCommand
     """
 
     def __init__(self) -> None:
         self.router = LocalRouter()
 
-    def understand(self, text: str) -> TikkiCommand:
+    def understand(self, text: str | dict[str, Any]) -> TikkiCommand:
+
+        # ---------------------------------------------------------
+        # Structured JSON / dictionary command path
+        # ---------------------------------------------------------
+
+        if isinstance(text, dict):
+            try:
+                return TikkiCommand.model_validate(text)
+            except ValueError:
+                return TikkiCommand(
+                    domain="unknown",
+                    action="unknown",
+                    operation="unknown",
+                    original_text=json.dumps(text),
+                    confidence=0.0,
+                )
+
+        # ---------------------------------------------------------
+        # Normal text input
+        # ---------------------------------------------------------
+
         normalized = " ".join(text.strip().split())
         normalized = normalized.rstrip(".,!?;:")
         normalized = re.sub(r"\bvoice\b", "volume", normalized, flags=re.I)
+
+        # ---------------------------------------------------------
+        # JSON string command path
+        #
+        # Allows:
+        # {
+        #   "domain": "audio",
+        #   "action": "volume_set",
+        #   "operation": "set",
+        #   "parameters": {"value": 30}
+        # }
+        # ---------------------------------------------------------
+
+        try:
+            payload = json.loads(normalized)
+
+            if isinstance(payload, dict):
+                return TikkiCommand.model_validate(payload)
+
+        except (json.JSONDecodeError, ValueError, TypeError):
+            pass
 
         if not normalized:
             return TikkiCommand(
@@ -35,8 +78,9 @@ class CommandUnderstanding:
             )
 
         # ---------------------------------------------------------
-        # First: use the existing deterministic router.
+        # First: deterministic router
         # ---------------------------------------------------------
+
         intent = self.router.route(normalized)
 
         if intent.kind != RouteKind.UNKNOWN:
@@ -44,13 +88,8 @@ class CommandUnderstanding:
 
         # ---------------------------------------------------------
         # Natural-language volume: SET
-        #
-        # Examples:
-        #   make the volume 50
-        #   make my volume fifty percent
-        #   set my sound to 50
-        #   put the volume at 50%
         # ---------------------------------------------------------
+
         value = self._extract_percentage(
             normalized,
             patterns=[
@@ -75,6 +114,7 @@ class CommandUnderstanding:
         # ---------------------------------------------------------
         # Natural-language volume: UP
         # ---------------------------------------------------------
+
         if self._matches_any(
             normalized,
             [
@@ -95,6 +135,7 @@ class CommandUnderstanding:
         # ---------------------------------------------------------
         # Natural-language volume: DOWN
         # ---------------------------------------------------------
+
         if self._matches_any(
             normalized,
             [
@@ -115,6 +156,7 @@ class CommandUnderstanding:
         # ---------------------------------------------------------
         # Natural-language brightness: SET
         # ---------------------------------------------------------
+
         value = self._extract_percentage(
             normalized,
             patterns=[
@@ -136,6 +178,7 @@ class CommandUnderstanding:
         # ---------------------------------------------------------
         # Natural-language brightness: UP
         # ---------------------------------------------------------
+
         if self._matches_any(
             normalized,
             [
@@ -155,6 +198,7 @@ class CommandUnderstanding:
         # ---------------------------------------------------------
         # Natural-language brightness: DOWN
         # ---------------------------------------------------------
+
         if self._matches_any(
             normalized,
             [
@@ -174,6 +218,7 @@ class CommandUnderstanding:
         # ---------------------------------------------------------
         # Unknown command
         # ---------------------------------------------------------
+
         return TikkiCommand(
             domain="unknown",
             action="unknown",
@@ -210,9 +255,13 @@ class CommandUnderstanding:
         )
 
     @staticmethod
-    def _extract_percentage(text: str, patterns: list[str]) -> int | None:
+    def _extract_percentage(
+        text: str,
+        patterns: list[str],
+    ) -> int | None:
         for pattern in patterns:
             match = re.fullmatch(pattern, text, re.I)
+
             if match:
                 value = int(match.group(1))
 
@@ -222,84 +271,6 @@ class CommandUnderstanding:
                 return value
 
         return None
-
-    @staticmethod
-    def _from_intent(intent) -> TikkiCommand:
-        action = intent.action
-        args = dict(intent.args or {})
-
-        domain = "system"
-        operation = "unknown"
-
-        if action.startswith("volume_"):
-            domain = "audio"
-
-            if action == "volume_set":
-                operation = "set"
-            elif action == "volume_up":
-                operation = "increase"
-            elif action == "volume_down":
-                operation = "decrease"
-            elif action == "volume_mute":
-                operation = "mute"
-            elif action == "volume_unmute":
-                operation = "unmute"
-
-        elif action.startswith("brightness_"):
-            domain = "display"
-
-            if action == "brightness_set":
-                operation = "set"
-            elif action == "brightness_up":
-                operation = "increase"
-            elif action == "brightness_down":
-                operation = "decrease"
-
-        elif action == "launch_app":
-            domain = "application"
-            operation = "launch"
-
-        elif action == "press_key":
-            domain = "keyboard"
-            operation = "press"
-
-        elif action in {"copy", "paste", "undo", "redo"}:
-            domain = "keyboard"
-            operation = action
-
-        elif action == "lock":
-            domain = "system"
-            operation = "lock"
-
-        elif action == "show_desktop":
-            domain = "system"
-            operation = "show_desktop"
-
-        elif intent.kind == RouteKind.VISION:
-            domain = "vision"
-
-        return TikkiCommand(
-            domain=domain,
-            action=action,
-            operation=operation,
-            parameters=args,
-            original_text=intent.original_text,
-            confidence=intent.confidence,
-        )
-
-@staticmethod
-def _extract_percentage(text: str, patterns: list[str]) -> int | None:
-    for pattern in patterns:
-        match = re.fullmatch(pattern, text, re.I)
-        if match:
-            value = int(match.group(1))
-
-            if not 0 <= value <= 100:
-                return None
-
-            return value
-
-    return None
 
     @staticmethod
     def _from_intent(intent) -> TikkiCommand:
