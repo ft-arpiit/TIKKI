@@ -1,0 +1,30 @@
+# Core
+pydantic>=2.8,<3
+python-dotenv>=1.0,<2
+pyautogui>=0.9.54
+mss>=10.2
+Pillow>=10.4
+numpy>=1.26,<3
+
+# Windows controls
+screen-brightness-control>=0.27.2
+pycaw>=20260921
+comtypes>=1.4.10
+
+# Offline speech
+faster-whisper>=1.2.0
+sounddevice>=0.5.1
+scipy>=1.13
+
+# Local TTS
+pyttsx3>=2.99
+
+# Optional async/cloud TTS backend
+edge-tts>=7.0.0
+
+# Vision/orchestration
+google-genai>=1.40.0
+langgraph>=0.6.0
+
+# Dev
+pytest>=8.3
