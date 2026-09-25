@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+from modules.validator import CommandValidator
 import logging
 from typing import TypedDict
 from modules.understanding import CommandUnderstanding
@@ -20,7 +20,7 @@ class TikkiState(TypedDict, total=False):
     result: str
     screenshot: object
     plan: object
-
+    validated: bool
 
 class TikkiAgent:
     def __init__(self) -> None:
@@ -29,7 +29,7 @@ class TikkiAgent:
         self.grabber = ScreenGrabber()
         self.grounder = VisualGrounder()
         self.graph = self._build_graph()
-
+        self.validator = CommandValidator()
     def _route(self, state: TikkiState) -> TikkiState:
         command = self.understanding.understand(state["text"])
 
@@ -49,7 +49,19 @@ class TikkiAgent:
                 "result": "I'm not confident enough to execute that command safely."
             }
 
-        return {}        
+        return {}
+    def _validate(self, state: TikkiState) -> TikkiState:
+        command = state["command"]
+
+        valid, reason = self.validator.validate(command)
+
+        if not valid:
+            return {
+                "validated": False,
+                "result": f"I won't execute that command: {reason}",
+            }
+
+        return {"validated": True}        
     def _execute_local(self, state: TikkiState) -> TikkiState:
         command = state["command"]
 
@@ -86,7 +98,10 @@ class TikkiAgent:
         return {"result": "I don't have a safe local action for that request yet."}
 
     @staticmethod
-    def _after_route(state: TikkiState) -> str:
+    def _after_validation(state: TikkiState) -> str:
+        if not state.get("validated", False):
+            return "rejected"
+
         command = state["command"]
 
         if command.domain == "vision":
@@ -105,13 +120,20 @@ class TikkiAgent:
         graph.add_node("ground", self._ground)
         graph.add_node("visual", self._execute_visual)
         graph.add_node("unknown", self._unknown)
-
+        graph.add_node("validate", self._validate)
         graph.add_edge(START, "route")
+        graph.add_edge("route", "validate")
         graph.add_conditional_edges(
-            "route",
-            self._after_route,
-            {"local": "local", "vision": "capture", "unknown": "unknown"},
-        )
+    "validate",
+    self._after_validation,
+    {
+        "local": "local",
+        "vision": "capture",
+        "unknown": "unknown",
+        "rejected": END,
+    },
+)
+        graph.add_edge("validate", END)
         graph.add_edge("capture", "ground")
         graph.add_edge("ground", "visual")
         graph.add_edge("local", END)

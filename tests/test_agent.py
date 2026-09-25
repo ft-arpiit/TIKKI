@@ -28,4 +28,14 @@ def test_agent_rejects_unknown_command_safely():
 
     result = agent.run("do something dangerous")
 
-    assert result == "I don't have a safe local action for that request yet."
+    assert result == "I won't execute that command: Unknown command."
+
+def test_rejected_command_never_reaches_executor():
+    agent = TikkiAgent()
+    fake = FakeExecutor()
+    agent.executor = fake
+
+    result = agent.run("do something dangerous")
+
+    assert result == "I won't execute that command: Unknown command."
+    assert fake.calls == []
