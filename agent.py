@@ -36,7 +36,20 @@ class TikkiAgent:
         return {
             "command": command,
         }
-        
+    def _validate_command(self, state: TikkiState) -> TikkiState:
+        command = state["command"]
+
+        if command.domain == "unknown":
+            return {
+                "result": "I don't have a safe local action for that request yet."
+            }
+
+        if command.confidence < 0.5:
+            return {
+                "result": "I'm not confident enough to execute that command safely."
+            }
+
+        return {}        
     def _execute_local(self, state: TikkiState) -> TikkiState:
         command = state["command"]
 
