@@ -35,15 +35,31 @@ class ScreenGrabber:
         self.sct = MSS()
 
     def capture(self) -> Image.Image:
-        monitor = self.sct.primary_monitor
+        monitor = self.sct.monitors[1]
         shot = self.sct.grab(monitor)
-        image = shot.to_pil("RGB")
-        scale = max(0.1, min(1.0, settings.screen_capture_scale))
+
+        image = Image.frombytes(
+            "RGB",
+            shot.size,
+            shot.bgra,
+            "raw",
+            "BGRX",
+        )
+
+        scale = max(
+            0.1,
+            min(1.0, settings.screen_capture_scale),
+        )
+
         if scale != 1.0:
             image = image.resize(
-                (max(1, int(image.width * scale)), max(1, int(image.height * scale))),
+                (
+                    max(1, int(image.width * scale)),
+                    max(1, int(image.height * scale)),
+                ),
                 Image.Resampling.LANCZOS,
             )
+
         return image
 
 

@@ -38,7 +38,9 @@ class LocalRouter:
 
     def __init__(self) -> None:
         self.rules = [
+            # ---------------------------------------------------------
             # Volume
+            # ---------------------------------------------------------
             Rule(
                 re.compile(
                     r"^(?:volume|sound)\s+(?:up|increase|louder)$",
@@ -54,15 +56,23 @@ class LocalRouter:
                 "volume_down",
             ),
             Rule(
-                re.compile(r"^(?:mute|mute volume|silence)$", re.I),
+                re.compile(
+                    r"^(?:mute|mute volume|silence)$",
+                    re.I,
+                ),
                 "volume_mute",
             ),
             Rule(
-                re.compile(r"^(?:unmute|restore sound)$", re.I),
+                re.compile(
+                    r"^(?:unmute|restore sound)$",
+                    re.I,
+                ),
                 "volume_unmute",
             ),
 
+            # ---------------------------------------------------------
             # Brightness
+            # ---------------------------------------------------------
             Rule(
                 re.compile(
                     r"^(?:brightness)\s+(?:up|increase|higher)$",
@@ -78,7 +88,9 @@ class LocalRouter:
                 "brightness_down",
             ),
 
+            # ---------------------------------------------------------
             # Windows
+            # ---------------------------------------------------------
             Rule(
                 re.compile(
                     r"^(?:alt[\s-]?tab|switch window|next window)$",
@@ -101,11 +113,25 @@ class LocalRouter:
                 "show_desktop",
             ),
 
-            # Clipboard/editing
-            Rule(re.compile(r"^(?:copy)$", re.I), "copy"),
-            Rule(re.compile(r"^(?:paste)$", re.I), "paste"),
-            Rule(re.compile(r"^(?:undo)$", re.I), "undo"),
-            Rule(re.compile(r"^(?:redo)$", re.I), "redo"),
+            # ---------------------------------------------------------
+            # Clipboard / editing
+            # ---------------------------------------------------------
+            Rule(
+                re.compile(r"^(?:copy)$", re.I),
+                "copy",
+            ),
+            Rule(
+                re.compile(r"^(?:paste)$", re.I),
+                "paste",
+            ),
+            Rule(
+                re.compile(r"^(?:undo)$", re.I),
+                "undo",
+            ),
+            Rule(
+                re.compile(r"^(?:redo)$", re.I),
+                "redo",
+            ),
         ]
 
     def route(self, text: str) -> Intent:
@@ -150,13 +176,12 @@ class LocalRouter:
             direction = m.group(1).lower()
             amount = max(0, min(100, int(m.group(2))))
 
-            if direction in {"up", "increase"}:
-                action = "volume_up"
-            else:
-                action = "volume_down"
+            action = (
+                "volume_up"
+                if direction in {"up", "increase"}
+                else "volume_down"
+            )
 
-            # The current executor uses the configured volume step.
-            # Store the requested amount so we can support it cleanly.
             return Intent(
                 kind=RouteKind.LOCAL,
                 action=action,
@@ -193,11 +218,6 @@ class LocalRouter:
 
         # ---------------------------------------------------------
         # Exact brightness percentage
-        #
-        # Supports:
-        #   brightness 50
-        #   set brightness 50
-        #   set brightness to 50
         # ---------------------------------------------------------
         m = re.fullmatch(
             r"(?:set\s+)?brightness\s+(?:to\s+)?(\d{1,3})(?:\s*%)?",
@@ -217,6 +237,11 @@ class LocalRouter:
 
         # ---------------------------------------------------------
         # Application launching
+        #
+        # Examples:
+        #   open Chrome
+        #   launch Chrome
+        #   start Chrome
         # ---------------------------------------------------------
         m = re.fullmatch(
             r"(?:open|launch|start)\s+(.+)",
@@ -237,6 +262,38 @@ class LocalRouter:
                     },
                     original_text=normalized,
                 )
+
+        # ---------------------------------------------------------
+        # Google / web search
+        #
+        # Supports:
+        #   search Google for OpenAI
+        #   search for OpenAI
+        #   Google search for OpenAI
+        #   google OpenAI
+        #   search google OpenAI
+        # ---------------------------------------------------------
+        search_patterns = [
+            r"^search\s+(?:google\s+)?for\s+(.+)$",
+            r"^search\s+google\s+(.+)$",
+            r"^google\s+search\s+for\s+(.+)$",
+            r"^google\s+(.+)$",
+        ]
+
+        for pattern in search_patterns:
+            m = re.fullmatch(pattern, normalized, re.I)
+
+            if m:
+                query = m.group(1).strip()
+
+                if query:
+                    return Intent(
+                        kind=RouteKind.LOCAL,
+                        action="google_search",
+                        args={"query": query},
+                        original_text=normalized,
+                        confidence=0.99,
+                    )
 
         # ---------------------------------------------------------
         # Keyboard keys
@@ -260,6 +317,10 @@ class LocalRouter:
                 "delete",
                 "home",
                 "end",
+                "up",
+                "down",
+                "left",
+                "right",
             }
 
             if key in allowed_keys:
@@ -296,6 +357,9 @@ class LocalRouter:
                 confidence=0.85,
             )
 
+        # ---------------------------------------------------------
+        # Unknown
+        # ---------------------------------------------------------
         return Intent(
             kind=RouteKind.UNKNOWN,
             action="needs_reasoning",

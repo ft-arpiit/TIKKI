@@ -41,7 +41,7 @@ class TikkiAgent:
 
         if command.domain == "unknown":
             return {
-                "result": "I don't have a safe local action for that request yet."
+                "result": "I won't execute that command: Unknown command."
             }
 
         if command.confidence < 0.5:

@@ -36,6 +36,7 @@ CommandOperation = Literal[
     "redo",
     "lock",
     "show_desktop",
+    "search",
     "unknown",
 ]
 

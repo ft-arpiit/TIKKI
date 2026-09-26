@@ -324,6 +324,10 @@ class CommandUnderstanding:
             domain = "system"
             operation = "show_desktop"
 
+        elif action == "google_search":
+            domain = "application"
+            operation = "search"
+
         elif intent.kind == RouteKind.VISION:
             domain = "vision"
 
